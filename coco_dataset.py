@@ -251,7 +251,7 @@ class ValDataset(torchdata.Dataset):
         annotations_file = os.path.join(
             self.root_dataset, "annotations", 'panoptic_val2017.json'
         )
-        self.annotations = json.load(open(annotations_file. 'r'))
+        self.annotations = json.load(open(annotations_file, 'r'))
 
         # categories
         assert 'categories' in self.annotations, 'there is not categories in annotations'

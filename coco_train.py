@@ -214,11 +214,11 @@ if __name__ == '__main__':
                         help="a name for identifying the model")
     parser.add_argument('--arch_encoder', default='resnet50_dilated8',
                         help="architecture of net_encoder")
-    parser.add_argument('--arch_decoder', default='ppm_bilinear',
+    parser.add_argument('--arch_decoder', default='ppm_bilinear_deepsup',
                         help="architecture of net_decoder")
-    parser.add_argument('--weights_encoder', default='pretrained/baseline-resnet50_dilated8-ppm_bilinear_deepsup/encoder_epoch_20.pth',
+    parser.add_argument('--weights_encoder', default='',
                         help="weights to finetune net_encoder")
-    parser.add_argument('--weights_decoder', default='pretrained/baseline-resnet50_dilated8-ppm_bilinear_deepsup/decoder_epoch_20.pth',
+    parser.add_argument('--weights_decoder', default='',
                         help="weights to finetune net_decoder")
     parser.add_argument('--fc_dim', default=2048, type=int,
                         help='number of features between encoder and decoder')
@@ -236,7 +236,7 @@ if __name__ == '__main__':
                         help='epochs to train for')
     parser.add_argument('--start_epoch', default=1, type=int,
                         help='epoch to start training. useful if continue from a checkpoint')
-    parser.add_argument('--epoch_iters', default=0, type=int,
+    parser.add_argument('--epoch_iters', default=5000, type=int,
                         help='iterations of each epoch (irrelevant to batch size)')
     parser.add_argument('--optim', default='SGD', help='optimizer')
     parser.add_argument('--lr_encoder', default=2e-2, type=float, help='LR')
@@ -261,7 +261,7 @@ if __name__ == '__main__':
                         help='input image size of short edge (int or list)')
     parser.add_argument('--imgMaxSize', default=1000, type=int,
                         help='maximum input image size of long edge')
-    parser.add_argument('--padding_constant', default=32, type=int,
+    parser.add_argument('--padding_constant', default=8, type=int,
                         help='maxmimum downsampling rate of the network')
     parser.add_argument('--segm_downsampling_rate', default=8, type=int,
                         help='downsampling rate of the segmentation label')
