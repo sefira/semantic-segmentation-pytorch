@@ -119,8 +119,9 @@ def worker(args, dev_id, start_idx, end_idx, result_queue):
 
 def main(args):
     # Parse device ids
-    default_dev, *parallel_dev = parse_devices(args.devices)
-    all_devs = parallel_dev + [default_dev]
+    #default_dev, parallel_dev = parse_devices(args.devices)
+    #all_devs = parallel_dev + [default_dev]
+    all_devs = parse_devices(args.devices)
     all_devs = [x.replace('gpu', '') for x in all_devs]
     all_devs = [int(x) for x in all_devs]
     nr_devs = len(all_devs)

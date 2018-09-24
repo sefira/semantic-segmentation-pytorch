@@ -6,4 +6,5 @@ log/
 pretrained/
 *.DS_Store*
 data/coco
+data/ADEChallengeData2016
 set_env.sh

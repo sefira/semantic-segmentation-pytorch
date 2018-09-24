@@ -176,6 +176,8 @@ class ValDataset(torchdata.Dataset):
             self.list_sample = self.list_sample[0:max_sample]
 
         if start_idx >= 0 and end_idx >= 0: # divide file list
+            start_idx = int(start_idx)
+            end_idx = int(end_idx)
             self.list_sample = self.list_sample[start_idx:end_idx]
 
         self.num_sample = len(self.list_sample)
