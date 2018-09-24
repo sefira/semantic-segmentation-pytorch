@@ -1,3 +1,8 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+
 import os
 import json
 import torch
@@ -61,30 +66,42 @@ class TrainDataset(torchdata.Dataset):
         annotations_file = os.path.join(
             self.root_dataset, "annotations", 'panoptic_train2017.json'
         )
-        self.annotations = json.load(annotations_file)
+        self.annotations = json.load(open(annotations_file, 'r'))
 
         # categories
-        assert 'categories' in annotations, 'there is not categories in annotations'
+        assert 'categories' in self.annotations, 'there is not categories in annotations'
         self.categories = {}
-        for cat in annotations['categories']:
+        for cat in self.annotations['categories']:
             self.categories[cat['id']] = cat
-        self.categories_ids = self.categories.keys().sort()
+        self.categories_ids = self.categories.keys()
+        self.categories_ids.sort()
+        print("dataset has {} categories : {}".format(len(self.categories_ids), self.categories_ids))
         self.categories_names = [self.categories[cat_id]['name'] for cat_id in self.categories_ids]
+        self.categories_names += ['unlabel']
         self.num_classes = len(self.categories_ids)
         self.json_category_id_to_contiguous_id = {
             v: i + 1
             for i, v in enumerate(self.categories_ids)
         }
+        assert 0 not in self.json_category_id_to_contiguous_id, '0 is unlabel pixel in coco'
+        # coco unlabeled pixel: 0
+        self.json_category_id_to_contiguous_id[0] = 0
         self.contiguous_category_id_to_json_id = {
             v: k
             for k, v in self.json_category_id_to_contiguous_id.items()
         }
+        for i in range(1, len(self.contiguous_category_id_to_json_id)):
+            cid = i
+            jid = self.contiguous_category_id_to_json_id[cid]
+            jname = self.categories[jid]['name']
+            print("contiguous id: {:4}, json id {:4}, json name {:}".format(cid, jid, jname))
         # images
-        assert 'images' in annotations, 'there is not images in annotations'
+        assert 'images' in self.annotations, 'there is not images in annotations'
         self.images = {}
-        for img in annotations['images']:
+        for img in self.annotations['images']:
             self.images[img['id']] = img
-        self.images_ids = self.images.keys().sort()
+        self.images_ids = self.images.keys()
+        self.images_ids.sort()
         self.list_sample = [self.images[img_id] for img_id in self.images_ids]
         if max_sample > 0:
             self.list_sample = self.list_sample[0:max_sample]
@@ -158,11 +175,11 @@ class TrainDataset(torchdata.Dataset):
             this_record = batch_records[i]
 
             # load image and label
-            image_path = self.image_list[index]['file_name']
+            image_path = self.list_sample[index]['file_name']
             image_path = os.path.join(
                 self.images_base, image_path
             )
-            segm_path = self.image_list[index]['file_name'].replace('jpg','png')
+            segm_path = self.list_sample[index]['file_name'].replace('jpg','png')
             segm_path = os.path.join(
                 self.annotations_base, segm_path,
             )
@@ -234,14 +251,15 @@ class ValDataset(torchdata.Dataset):
         annotations_file = os.path.join(
             self.root_dataset, "annotations", 'panoptic_val2017.json'
         )
-        self.annotations = json.load(annotations_file)
+        self.annotations = json.load(open(annotations_file. 'r'))
 
         # categories
-        assert 'categories' in annotations, 'there is not categories in annotations'
+        assert 'categories' in self.annotations, 'there is not categories in annotations'
         self.categories = {}
-        for cat in annotations['categories']:
+        for cat in self.annotations['categories']:
             self.categories[cat['id']] = cat
-        self.categories_ids = self.categories.keys().sort()
+        self.categories_ids = self.categories.keys()
+        self.categories_ids.sort()
         self.categories_names = [self.categories[cat_id]['name'] for cat_id in self.categories_ids]
         self.num_classes = len(self.categories_ids)
         self.json_category_id_to_contiguous_id = {
@@ -253,11 +271,12 @@ class ValDataset(torchdata.Dataset):
             for k, v in self.json_category_id_to_contiguous_id.items()
         }
         # images
-        assert 'images' in annotations, 'there is not images in annotations'
+        assert 'images' in self.annotations, 'there is not images in annotations'
         self.images = {}
-        for img in annotations['images']:
+        for img in self.annotations['images']:
             self.images[img['id']] = img
-        self.images_ids = self.images.keys().sort()
+        self.images_ids = self.images.keys()
+        self.images_ids.sort()
         self.list_sample = [self.images[img_id] for img_id in self.images_ids]
 
         if max_sample > 0:
@@ -273,11 +292,11 @@ class ValDataset(torchdata.Dataset):
     def __getitem__(self, index):
         this_record = self.list_sample[index]
         # load image and label
-        image_path = self.image_list[index]['file_name']
+        image_path = self.list_sample[index]['file_name']
         image_path = os.path.join(
             self.images_base, image_path
         )
-        segm_path = self.image_list[index]['file_name'].replace('jpg','png')
+        segm_path = self.list_sample[index]['file_name'].replace('jpg','png')
         segm_path = os.path.join(
             self.annotations_base, segm_path,
         )

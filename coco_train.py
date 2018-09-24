@@ -216,9 +216,9 @@ if __name__ == '__main__':
                         help="architecture of net_encoder")
     parser.add_argument('--arch_decoder', default='ppm_bilinear',
                         help="architecture of net_decoder")
-    parser.add_argument('--weights_encoder', default='baseline-resnet50_dilated8-ppm_bilinear_deepsup/encoder_epoch_20.pth',
+    parser.add_argument('--weights_encoder', default='pretrained/baseline-resnet50_dilated8-ppm_bilinear_deepsup/encoder_epoch_20.pth',
                         help="weights to finetune net_encoder")
-    parser.add_argument('--weights_decoder', default='baseline-resnet50_dilated8-ppm_bilinear_deepsup/decoder_epoch_20.pth',
+    parser.add_argument('--weights_decoder', default='pretrained/baseline-resnet50_dilated8-ppm_bilinear_deepsup/decoder_epoch_20.pth',
                         help="weights to finetune net_decoder")
     parser.add_argument('--fc_dim', default=2048, type=int,
                         help='number of features between encoder and decoder')
@@ -253,7 +253,7 @@ if __name__ == '__main__':
                         help='fix bn params')
 
     # Data related arguments
-    parser.add_argument('--num_class', default=134, type=int,
+    parser.add_argument('--num_class', default=133, type=int,
                         help='number of classes')
     parser.add_argument('--workers', default=16, type=int,
                         help='number of data loading workers')
@@ -282,7 +282,7 @@ if __name__ == '__main__':
 
     args.batch_size = args.num_gpus * args.batch_size_per_gpu
     coco_dataset_images_num = 118287
-    arg.epoch_iters = int(coco_dataset_images_num / args.batch_size)
+    args.epoch_iters = int(coco_dataset_images_num / args.batch_size)
     args.max_iters = args.epoch_iters * args.num_epoch
     print('max_iters: {}'.format(args.max_iters))
     args.running_lr_encoder = args.lr_encoder

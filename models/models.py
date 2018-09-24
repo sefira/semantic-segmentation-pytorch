@@ -26,7 +26,7 @@ class SegmentationModule(SegmentationModuleBase):
         self.crit = crit
         self.deep_sup_scale = deep_sup_scale
 
-    def forward(self, feed_dict, *, segSize=None):
+    def forward(self, feed_dict, segSize=None):
         if segSize is None: # training
             if self.deep_sup_scale is not None: # use deep supervision technique
                 (pred, pred_deepsup) = self.decoder(self.encoder(feed_dict['img_data'], return_feature_maps=True))
@@ -180,8 +180,25 @@ class ModelBuilder():
         net_decoder.apply(self.weights_init)
         if len(weights) > 0:
             print('Loading weights for net_decoder')
-            net_decoder.load_state_dict(
-                torch.load(weights, map_location=lambda storage, loc: storage), strict=False)
+            model_dict = net_decoder.state_dict()
+            loaded_dict = torch.load(weights, map_location=lambda storage, loc: storage)
+            matched_dict = {}
+            for k,v in loaded_dict.items():
+                if k in model_dict:
+                    if v.shape == model_dict[k].shape:
+                        matched_dict[k] = v
+                    else:
+                        print("{} has different shape in loaded {} and created model {}".format(k, v.shape, model_dict[k].shape))
+                else:
+                    print("loaded model has an unrecognized params: {}".format(k))
+            for k,v in model_dict.items():
+                if not k in matched_dict:
+                    print("model need {}, but not loaded".format(k))
+            print("loaded {} params from file, model need {} params, {} matched".format(len(loaded_dict), len(model_dict), len(matched_dict)))
+            model_dict.update(matched_dict)
+            net_decoder.load_state_dict(model_dict)
+            #net_decoder.load_state_dict(
+            #    torch.load(weights, map_location=lambda storage, loc: storage), strict=False)
         return net_decoder
 
 

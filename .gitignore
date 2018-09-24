@@ -5,3 +5,5 @@ vis/
 log/
 pretrained/
 *.DS_Store*
+data/coco
+set_env.sh
