@@ -175,11 +175,11 @@ class TrainDataset(torchdata.Dataset):
             this_record = batch_records[i]
 
             # load image and label
-            image_path = self.list_sample[index]['file_name']
+            image_path = this_record['file_name']
             image_path = os.path.join(
                 self.images_base, image_path
             )
-            segm_path = self.list_sample[index]['file_name'].replace('jpg','png')
+            segm_path = this_record['file_name'].replace('jpg','png')
             segm_path = os.path.join(
                 self.annotations_base, segm_path,
             )
@@ -283,6 +283,8 @@ class ValDataset(torchdata.Dataset):
             self.list_sample = self.list_sample[0:max_sample]
 
         if start_idx >= 0 and end_idx >= 0: # divide file list
+            start_idx = int(start_idx)
+            end_idx = int(end_idx)
             self.list_sample = self.list_sample[start_idx:end_idx]
 
         self.num_sample = len(self.list_sample)
@@ -292,11 +294,11 @@ class ValDataset(torchdata.Dataset):
     def __getitem__(self, index):
         this_record = self.list_sample[index]
         # load image and label
-        image_path = self.list_sample[index]['file_name']
+        image_path = this_record['file_name']
         image_path = os.path.join(
             self.images_base, image_path
         )
-        segm_path = self.list_sample[index]['file_name'].replace('jpg','png')
+        segm_path = this_record['file_name'].replace('jpg','png')
         segm_path = os.path.join(
             self.annotations_base, segm_path,
         )
