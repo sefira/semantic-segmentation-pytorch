@@ -114,8 +114,8 @@ class TrainDataset(torchdata.Dataset):
             this_record = batch_records[i]
 
             # load image and label
-            image_path = os.path.join(self.root_dataset, this_record['fpath_img'])
-            segm_path = os.path.join(self.root_dataset, this_record['fpath_segm'])
+            image_path = os.path.join(self.root_dataset, this_record['fpath_img']).encode('utf-8')
+            segm_path = os.path.join(self.root_dataset, this_record['fpath_segm']).encode('utf-8')
             img = imread(image_path, mode='RGB')
             segm = imread(segm_path)
             segm = segm + 1
@@ -193,8 +193,8 @@ class ValDataset(torchdata.Dataset):
     def __getitem__(self, index):
         this_record = self.list_sample[index]
         # load image and label
-        image_path = os.path.join(self.root_dataset, this_record['fpath_img'])
-        segm_path = os.path.join(self.root_dataset, this_record['fpath_segm'])
+        image_path = os.path.join(self.root_dataset, this_record['fpath_img']).encode('utf-8')
+        segm_path = os.path.join(self.root_dataset, this_record['fpath_segm']).encode('utf-8')
         img = imread(image_path, mode='RGB')
         img = img[:, :, ::-1] # BGR to RGB!!!
         segm = imread(segm_path)
@@ -268,7 +268,7 @@ class TestDataset(torchdata.Dataset):
     def __getitem__(self, index):
         this_record = self.list_sample[index]
         # load image and label
-        image_path = this_record['fpath_img']
+        image_path = this_record['fpath_img'].encode('utf-8')
         img = imread(image_path, mode='RGB')
         img = img[:, :, ::-1] # BGR to RGB!!!
 
