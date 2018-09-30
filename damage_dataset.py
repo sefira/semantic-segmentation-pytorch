@@ -107,8 +107,8 @@ class TrainDataset(torchdata.Dataset):
         assert self.padding_constant >= self.segm_downsampling_rate,\
                 'padding constant must be equal or large than segm downsamping rate'
         batch_images = torch.zeros(self.batch_per_gpu, 3, batch_resized_height, batch_resized_width)
-        batch_segms = torch.ones(self.batch_per_gpu, batch_resized_height // self.segm_downsampling_rate, \
-                                batch_resized_width // self.segm_downsampling_rate).long() * -1
+        batch_segms = torch.zeros(self.batch_per_gpu, batch_resized_height // self.segm_downsampling_rate, \
+                                batch_resized_width // self.segm_downsampling_rate).long()
 
         for i in range(self.batch_per_gpu):
             this_record = batch_records[i]
@@ -118,6 +118,7 @@ class TrainDataset(torchdata.Dataset):
             segm_path = os.path.join(self.root_dataset, this_record['fpath_segm'])
             img = imread(image_path, mode='RGB')
             segm = imread(segm_path)
+            segm = segm + 1
 
             assert(img.ndim == 3)
             assert(segm.ndim == 2)
@@ -137,7 +138,7 @@ class TrainDataset(torchdata.Dataset):
             # to avoid seg label misalignment
             segm_rounded_height = round2nearest_multiple(segm.shape[0], self.segm_downsampling_rate)
             segm_rounded_width = round2nearest_multiple(segm.shape[1], self.segm_downsampling_rate)
-            segm_rounded = np.ones((segm_rounded_height, segm_rounded_width), dtype='uint8') * -1
+            segm_rounded = np.zeros((segm_rounded_height, segm_rounded_width), dtype='uint8')
             segm_rounded[:segm.shape[0], :segm.shape[1]] = segm
 
             segm = imresize(segm_rounded, (segm_rounded.shape[0] // self.segm_downsampling_rate, \
@@ -151,7 +152,7 @@ class TrainDataset(torchdata.Dataset):
             batch_images[i][:, :img.shape[1], :img.shape[2]] = img
             batch_segms[i][:segm.shape[0], :segm.shape[1]] = torch.from_numpy(segm.astype(np.int)).long()
 
-        # batch_segms = batch_segms - 1 # label from -1 to 149
+        batch_segms = batch_segms - 1 # label from -1 to 149
         output = dict()
         output['img_data'] = batch_images
         output['seg_label'] = batch_segms
@@ -197,6 +198,7 @@ class ValDataset(torchdata.Dataset):
         img = imread(image_path, mode='RGB')
         img = img[:, :, ::-1] # BGR to RGB!!!
         segm = imread(segm_path)
+        segm = segm + 1
 
         ori_height, ori_width, _ = img.shape
 
@@ -226,7 +228,7 @@ class ValDataset(torchdata.Dataset):
 
         batch_segms = torch.unsqueeze(segm, 0)
 
-        # batch_segms = batch_segms - 1 # label from -1 to 149
+        batch_segms = batch_segms - 1 # label from -1 to 149
         output = dict()
         output['img_ori'] = img.copy()
         output['img_data'] = [x.contiguous() for x in img_resized_list]
