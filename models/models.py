@@ -134,8 +134,25 @@ class ModelBuilder():
         # net_encoder.apply(self.weights_init)
         if len(weights) > 0:
             print('Loading weights for net_encoder')
-            net_encoder.load_state_dict(
-                torch.load(weights, map_location=lambda storage, loc: storage), strict=False)
+            model_dict = net_encoder.state_dict()
+            loaded_dict = torch.load(weights, map_location=lambda storage, loc: storage)
+            matched_dict = {}
+            for k,v in loaded_dict.items():
+                if k in model_dict:
+                    if v.shape == model_dict[k].shape:
+                        matched_dict[k] = v
+                    else:
+                        print("{} has different shape in loaded {} and created model {}".format(k, v.shape, model_dict[k].shape))
+                else:
+                    print("loaded model has an unrecognized params: {}".format(k))
+            for k,v in model_dict.items():
+                if not k in matched_dict:
+                    print("model need {}, but not loaded".format(k))
+            print("loaded {} params from file, model need {} params, {} matched".format(len(loaded_dict), len(model_dict), len(matched_dict)))
+            model_dict.update(matched_dict)
+            net_encoder.load_state_dict(model_dict)
+            # net_encoder.load_state_dict(
+            #     torch.load(weights, map_location=lambda storage, loc: storage), strict=False)
         return net_encoder
 
     def build_decoder(self, arch='ppm_bilinear_deepsup',
