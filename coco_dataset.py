@@ -103,8 +103,10 @@ class TrainDataset(torchdata.Dataset):
         self.images_ids = self.images.keys()
         self.images_ids.sort()
         self.list_sample = [self.images[img_id] for img_id in self.images_ids]
+
         if max_sample > 0:
             self.list_sample = self.list_sample[0:max_sample]
+
         self.num_sample = len(self.list_sample)
         assert self.num_sample > 0
         print('# samples: {}'.format(self.num_sample))
@@ -260,16 +262,26 @@ class ValDataset(torchdata.Dataset):
             self.categories[cat['id']] = cat
         self.categories_ids = self.categories.keys()
         self.categories_ids.sort()
+        print("dataset has {} categories : {}".format(len(self.categories_ids), self.categories_ids))
         self.categories_names = [self.categories[cat_id]['name'] for cat_id in self.categories_ids]
+        self.categories_names += ['unlabel']
         self.num_classes = len(self.categories_ids)
         self.json_category_id_to_contiguous_id = {
             v: i + 1
             for i, v in enumerate(self.categories_ids)
         }
+        assert 0 not in self.json_category_id_to_contiguous_id, '0 is unlabel pixel in coco'
+        # coco unlabeled pixel: 0
+        self.json_category_id_to_contiguous_id[0] = 0
         self.contiguous_category_id_to_json_id = {
             v: k
             for k, v in self.json_category_id_to_contiguous_id.items()
         }
+        for i in range(1, len(self.contiguous_category_id_to_json_id)):
+            cid = i
+            jid = self.contiguous_category_id_to_json_id[cid]
+            jname = self.categories[jid]['name']
+            print("contiguous id: {:4}, json id {:4}, json name {:}".format(cid, jid, jname))
         # images
         assert 'images' in self.annotations, 'there is not images in annotations'
         self.images = {}
@@ -340,7 +352,7 @@ class ValDataset(torchdata.Dataset):
         output['img_ori'] = img.copy()
         output['img_data'] = [x.contiguous() for x in img_resized_list]
         output['seg_label'] = batch_segms.contiguous()
-        output['info'] = this_record['fpath_img']
+        output['info'] = this_record['file_name']
         return output
 
     def __len__(self):
