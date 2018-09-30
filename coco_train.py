@@ -166,6 +166,7 @@ def main(args):
     else:
         segmentation_module = SegmentationModule(
             net_encoder, net_decoder, crit)
+    print(segmentation_module)
 
     # Dataset and Loader
     dataset_train = TrainDataset(args, batch_per_gpu=args.batch_size_per_gpu)
