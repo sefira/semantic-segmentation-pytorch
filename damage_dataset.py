@@ -118,7 +118,7 @@ class TrainDataset(torchdata.Dataset):
             segm_path = os.path.join(self.root_dataset, this_record['fpath_segm']).encode('utf-8')
             img = imread(image_path, mode='RGB')
             segm = imread(segm_path)
-            segm = segm + 1
+            segm = segm + 1 # segm is uint8, for 255 ignore index, Adding 1 will move 255 to 0
 
             assert(img.ndim == 3)
             assert(segm.ndim == 2)
@@ -198,7 +198,7 @@ class ValDataset(torchdata.Dataset):
         img = imread(image_path, mode='RGB')
         img = img[:, :, ::-1] # BGR to RGB!!!
         segm = imread(segm_path)
-        segm = segm + 1
+        segm = segm + 1 # segm is uint8, for 255 ignore index, Adding 1 will move 255 to 0
 
         ori_height, ori_width, _ = img.shape
 
