@@ -159,7 +159,7 @@ class TrainDataset(torchdata.Dataset):
         return output
 
     def __len__(self):
-        return int(1e6) # It's a fake length due to the trick that every loader maintains its own list
+        return int(1e9) # It's a fake length due to the trick that every loader maintains its own list
         #return self.num_sampleclass
 
 
