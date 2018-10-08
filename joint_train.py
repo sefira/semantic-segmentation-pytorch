@@ -39,6 +39,10 @@ def train(segmentation_module, iterator_damage, iterator_part, optimizers, histo
     # main loop
     tic = time.time()
     for i in range(args.epoch_iters):
+        # adjust learning rate
+        cur_iter = i + (epoch - 1) * args.epoch_iters
+        adjust_learning_rate(optimizers, cur_iter, args)
+
         batch_data_damage = next(iterator_damage)
         batch_data_part = next(iterator_part)
         data_time.update(time.time() - tic)
@@ -96,10 +100,6 @@ def train(segmentation_module, iterator_damage, iterator_part, optimizers, histo
             history['train']['acc'].append(acc.data.item())
             history['train']['acc_damage'].append(acc_damage.data.item())
             history['train']['acc_part'].append(acc_part.data.item())
-
-        # adjust learning rate
-        cur_iter = i + (epoch - 1) * args.epoch_iters
-        adjust_learning_rate(optimizers, cur_iter, args)
 
 
 def checkpoint(nets, history, args, epoch_num):
