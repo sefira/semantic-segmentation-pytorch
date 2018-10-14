@@ -23,14 +23,14 @@ import lib.utils.data as torchdata
 
 # train one epoch
 def train(segmentation_module, iterator_damage, iterator_part, optimizers, history, epoch, args):
-    batch_time = AverageMeter()
-    data_time = AverageMeter()
-    ave_total_loss = AverageMeter()
-    ave_total_loss_damage = AverageMeter()
-    ave_total_loss_part = AverageMeter()
-    ave_acc = AverageMeter()
-    ave_acc_damage = AverageMeter()
-    ave_acc_part = AverageMeter()
+    batch_time = AverageMeter(window_size=20)
+    data_time = AverageMeter(window_size=20)
+    ave_total_loss = AverageMeter(window_size=20)
+    ave_total_loss_damage = AverageMeter(window_size=20)
+    ave_total_loss_part = AverageMeter(window_size=20)
+    ave_acc = AverageMeter(window_size=20)
+    ave_acc_damage = AverageMeter(window_size=20)
+    ave_acc_part = AverageMeter(window_size=20)
     damage_loss_scale = 1 - args.part_loss_scale
     part_loss_scale = args.part_loss_scale
 

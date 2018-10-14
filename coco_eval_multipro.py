@@ -144,9 +144,9 @@ def main(args):
 
     pbar = tqdm(total=nr_files)
 
-    acc_meter = AverageMeter()
-    intersection_meter = AverageMeter()
-    union_meter = AverageMeter()
+    acc_meter = AverageMeter(window_size=None)
+    intersection_meter = AverageMeter(window_size=None)
+    union_meter = AverageMeter(window_size=None)
 
     result_queue = Queue(500)
     procs = []

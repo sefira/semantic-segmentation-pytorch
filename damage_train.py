@@ -23,10 +23,10 @@ import lib.utils.data as torchdata
 
 # train one epoch
 def train(segmentation_module, iterator, optimizers, history, epoch, args):
-    batch_time = AverageMeter()
-    data_time = AverageMeter()
-    ave_total_loss = AverageMeter()
-    ave_acc = AverageMeter()
+    batch_time = AverageMeter(window_size=20)
+    data_time = AverageMeter(window_size=20)
+    ave_total_loss = AverageMeter(window_size=20)
+    ave_acc = AverageMeter(window_size=20)
 
     segmentation_module.train(not args.fix_bn)
 

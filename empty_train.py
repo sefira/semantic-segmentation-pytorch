@@ -24,8 +24,8 @@ import lib.utils.data as torchdata
 
 # train one epoch
 def train(iterator, history, epoch, args):
-    batch_time = AverageMeter()
-    data_time = AverageMeter()
+    batch_time = AverageMeter(window_size=20)
+    data_time = AverageMeter(window_size=20)
 
     # main loop
     tic = time.time()

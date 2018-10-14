@@ -10,7 +10,7 @@ from collections import deque
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
-    def __init__(self, window_size=20):
+    def __init__(self, window_size=None):
         self.deque = deque(maxlen=window_size)
         self.initialized = False
         self.val = None

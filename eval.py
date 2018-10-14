@@ -43,9 +43,9 @@ def visualize_result(data, preds, args):
 
 
 def evaluate(segmentation_module, loader, args):
-    acc_meter = AverageMeter()
-    intersection_meter = AverageMeter()
-    union_meter = AverageMeter()
+    acc_meter = AverageMeter(window_size=None)
+    intersection_meter = AverageMeter(window_size=None)
+    union_meter = AverageMeter(window_size=None)
 
     segmentation_module.eval()
 
