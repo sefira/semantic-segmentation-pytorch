@@ -35,9 +35,9 @@ class SegmentationModule(SegmentationModuleBase):
     def forward(self, feed_dict, segSize=None):
         if segSize is None: # training
             if self.deep_sup_scale is not None: # use deep supervision technique
-                (pred, pred_deepsup) = self.decoder(self.encoder(feed_dict['img_data'], return_feature_maps=True))
+                (pred, pred_deepsup) = self.decoder(self.encoder(feed_dict['img_data'], feed_dict['img_grey_data'], return_feature_maps=True))
             else:
-                pred = self.decoder(self.encoder(feed_dict['img_data'], return_feature_maps=True))
+                pred = self.decoder(self.encoder(feed_dict['img_data'], feed_dict['img_grey_data'], return_feature_maps=True))
 
             loss = self.crit(pred, feed_dict['seg_label'])
             if self.deep_sup_scale is not None:
@@ -47,7 +47,7 @@ class SegmentationModule(SegmentationModuleBase):
             acc = self.pixel_acc(pred, feed_dict['seg_label'])
             return loss, acc
         else: # inference
-            pred = self.decoder(self.encoder(feed_dict['img_data'], return_feature_maps=True), segSize=segSize)
+            pred = self.decoder(self.encoder(feed_dict['img_data'], feed_dict['img_grey_data'], return_feature_maps=True), segSize=segSize)
             return pred
 
 

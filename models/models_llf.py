@@ -25,7 +25,7 @@ def conv3x3_bn_relu(in_planes, out_planes, stride=1):
 
 def dog_gabor_init_(tensor, llf):
     dimensions = tensor.ndimension()
-    if dimensions not in [3]:
+    if dimensions not in [4]:
         raise ValueError("Only tensors with 3 dimensions are supported")
     sizes = tensor.size()
     out_planes, in_planes, kh, kw = sizes
@@ -33,16 +33,28 @@ def dog_gabor_init_(tensor, llf):
     with torch.no_grad():
         tensor.zero_()
         for idx in range(len(llf)):
-            for h in range(len(kh)):
-                for w in range(len(kw))
-                    tensor[idx, 1, h, w] = llf[idx][h, w]
+            for h in range(kh):
+                for w in range(kw):
+                    tensor[idx, 0, h, w] = llf[idx][h, w]
     return tensor
 
+def zeros_init_(tensor):
+    r"""Fills the input Tensor with zeros`.
+
+    Args:
+        tensor: an n-dimensional `torch.Tensor`
+
+    Examples:
+        >>> w = torch.empty(3, 5)
+        >>> nn.init.zeros_(w)
+    """
+    with torch.no_grad():
+        return tensor.zero_()
 
 # resnet, dilated, low level filter bank
 class ResnetDilatedLLF(nn.Module):
-    def __init__(self, orig_resnet, dilate_scale=8, DoG=False, Gabor=False):
-        super(ResnetDilated, self).__init__()
+    def __init__(self, orig_resnet, dilate_scale=8, DoG=False, Gabor=True):
+        super(ResnetDilatedLLF, self).__init__()
         from functools import partial
 
         if dilate_scale == 8:
@@ -91,14 +103,22 @@ class ResnetDilatedLLF(nn.Module):
                     gabor_96_11[i] = kernels[i]
                 for i in (77, 74, 4, 41, 48):
                     self.llf.append(gabor_96_11[i])
+            # define llf
             self.conv_llf = conv3x3(1, len(self.llf))
             dog_gabor_init_(self.conv_llf.weight.data, self.llf)
+            self.conv_llf.requires_grad = False
+            self.conv_llf_downsample = conv3x3(len(self.llf), len(self.llf), stride=4)
+            zeros_init_(self.conv_llf_downsample.weight.data)
 
             # insert llf into special layer
             print('insert llf into {}'.format(self.layer2[0].conv1))
             in_channels = self.layer2[0].conv1.in_channels
             out_channels = self.layer2[0].conv1.out_channels
-            self.layer2[0].conv1 = nn.Conv2d(in_channels + len(self.llc), out_channels, kernel_size=1, bias=False)
+            self.layer2[0].conv1 = nn.Conv2d(in_channels + len(self.llf), out_channels, kernel_size=1, bias=False)
+            in_channels = self.layer2[0].downsample[0].in_channels
+            out_channels = self.layer2[0].downsample[0].out_channels
+            stride_ = self.layer2[0].downsample[0].stride
+            self.layer2[0].downsample[0] = nn.Conv2d(in_channels + len(self.llf), out_channels, kernel_size=1, stride=stride_ ,bias=False)
 
     def _nostride_dilate(self, m, dilate):
         classname = m.__class__.__name__
@@ -118,6 +138,7 @@ class ResnetDilatedLLF(nn.Module):
     def forward(self, x, gray_x, return_feature_maps=False):
         conv_out = []
         llf_out = self.conv_llf(gray_x)
+        llf_out = self.conv_llf_downsample(llf_out)
 
         x = self.relu1(self.bn1(self.conv1(x)))
         x = self.relu2(self.bn2(self.conv2(x)))
