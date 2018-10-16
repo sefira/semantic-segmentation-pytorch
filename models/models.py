@@ -8,6 +8,7 @@ import torch.nn as nn
 import torchvision
 from . import resnet, resnext
 from lib.nn import SynchronizedBatchNorm2d
+from models.models_llf import ResnetDilatedLLF
 
 
 class SegmentationModuleBase(nn.Module):
@@ -128,6 +129,10 @@ class ModelBuilder():
         elif arch == 'resnext101':
             orig_resnext = resnext.__dict__['resnext101'](pretrained=pretrained)
             net_encoder = Resnet(orig_resnext) # we can still use class Resnet
+        elif arch == 'resnet50_dilated8_llf':
+            orig_resnet = resnet.__dict__['resnet50'](pretrained=pretrained)
+            net_encoder = ResnetDilatedLLF(orig_resnet,
+                                        dilate_scale=8)
         else:
             raise Exception('Architecture undefined!')
 
