@@ -77,7 +77,7 @@ class ModelBuilder():
         #    m.weight.data.normal_(0.0, 0.0001)
 
 
-    def load_and_check_model_dict(self, weight, model_dict):
+    def load_and_check_model_dict(self, weights, model_dict):
         loaded_dict = torch.load(weights, map_location=lambda storage, loc: storage)
         matched_dict = {}
         for k,v in loaded_dict.items():

@@ -10,18 +10,6 @@ import cv2
 import models.gabor as gabor
 from models.models import *
 
-def conv3x3(in_planes, out_planes, stride=1, has_bias=False):
-    "3x3 convolution with padding"
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=1, bias=has_bias)
-
-
-def conv3x3_bn_relu(in_planes, out_planes, stride=1):
-    return nn.Sequential(
-            conv3x3(in_planes, out_planes, stride),
-            SynchronizedBatchNorm2d(out_planes),
-            nn.ReLU(inplace=True),
-            )
 
 def dog_gabor_init_(tensor, llf):
     dimensions = tensor.ndimension()
@@ -29,7 +17,7 @@ def dog_gabor_init_(tensor, llf):
         raise ValueError("Only tensors with 3 dimensions are supported")
     sizes = tensor.size()
     out_planes, in_planes, kh, kw = sizes
-    assert in_planes == 1, "Only gray image supported"
+    assert in_planes == 1, "Only grey image supported"
     with torch.no_grad():
         tensor.zero_()
         for idx in range(len(llf)):
@@ -39,21 +27,38 @@ def dog_gabor_init_(tensor, llf):
     return tensor
 
 def zeros_init_(tensor):
-    r"""Fills the input Tensor with zeros`.
-
-    Args:
-        tensor: an n-dimensional `torch.Tensor`
-
-    Examples:
-        >>> w = torch.empty(3, 5)
-        >>> nn.init.zeros_(w)
-    """
     with torch.no_grad():
         return tensor.zero_()
 
+class LLFBlock(nn.Module):
+    def __init__(self, outplanes, llf=None):
+        super(LLFBlock, self).__init__()
+        inplanes = len(llf)
+        assert llf[0].shape[0] == llf[0].shape[1], 'llf kernels must be square'
+        kernel_size = llf[0].shape[1]
+        self.conv_llf = nn.Conv2d(1, inplanes, kernel_size=kernel_size, stride=1, padding=kernel_size//2, bias=False)
+        dog_gabor_init_(self.conv_llf.weight.data, llf)
+        self.conv_llf.weight.requires_grad = False
+
+        self.conv_llf_stride = nn.Conv2d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, bias=False)
+        zeros_init_(self.conv_llf_stride.weight.data)
+
+        self.bn = SynchronizedBatchNorm2d(outplanes)
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        llf_out = []
+        x = self.conv_llf(x);           llf_out.append(x);
+        x = self.conv_llf_stride(x);    llf_out.append(x);
+        x = self.bn(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+        return x, llf_out
+
 # resnet, dilated, low level filter bank
 class ResnetDilatedLLF(nn.Module):
-    def __init__(self, orig_resnet, dilate_scale=8, DoG=False, Gabor=True):
+    def __init__(self, orig_resnet, dilate_scale=8, DoG=True, Gabor=True):
         super(ResnetDilatedLLF, self).__init__()
         from functools import partial
 
@@ -104,21 +109,8 @@ class ResnetDilatedLLF(nn.Module):
                 for i in (77, 74, 4, 41, 48):
                     self.llf.append(gabor_96_11[i])
             # define llf
-            self.conv_llf = conv3x3(1, len(self.llf))
-            dog_gabor_init_(self.conv_llf.weight.data, self.llf)
-            self.conv_llf.requires_grad = False
-            self.conv_llf_downsample = conv3x3(len(self.llf), len(self.llf), stride=4)
-            zeros_init_(self.conv_llf_downsample.weight.data)
+            self.llf_block = LLFBlock(outplanes=128, llf=self.llf)
 
-            # insert llf into special layer
-            print('insert llf into {}'.format(self.layer2[0].conv1))
-            in_channels = self.layer2[0].conv1.in_channels
-            out_channels = self.layer2[0].conv1.out_channels
-            self.layer2[0].conv1 = nn.Conv2d(in_channels + len(self.llf), out_channels, kernel_size=1, bias=False)
-            in_channels = self.layer2[0].downsample[0].in_channels
-            out_channels = self.layer2[0].downsample[0].out_channels
-            stride_ = self.layer2[0].downsample[0].stride
-            self.layer2[0].downsample[0] = nn.Conv2d(in_channels + len(self.llf), out_channels, kernel_size=1, stride=stride_ ,bias=False)
 
     def _nostride_dilate(self, m, dilate):
         classname = m.__class__.__name__
@@ -135,19 +127,16 @@ class ResnetDilatedLLF(nn.Module):
                     m.dilation = (dilate, dilate)
                     m.padding = (dilate, dilate)
 
-    def forward(self, x, gray_x, return_feature_maps=False):
+    def forward(self, x, grey_x, return_feature_maps=False):
         conv_out = []
-        llf_out = []
-        llf = self.conv_llf(gray_x);        llf_out.append(llf);
-        llf = self.conv_llf_downsample(llf);llf_out.append(llf);
+        llf_fin, llf_out = self.llf_block(grey_x)
 
         x = self.relu1(self.bn1(self.conv1(x)))
         x = self.relu2(self.bn2(self.conv2(x)))
         x = self.relu3(self.bn3(self.conv3(x)))
         x = self.maxpool(x)
-
+        x += llf_fin
         x = self.layer1(x); conv_out.append(x);
-        x = torch.cat((x, llf), dim=1)
         x = self.layer2(x); conv_out.append(x);
         x = self.layer3(x); conv_out.append(x);
         x = self.layer4(x); conv_out.append(x);
@@ -159,7 +148,7 @@ class ResnetDilatedLLF(nn.Module):
 
 class LLFSegmentationModule(SegmentationModule):
     def __init__(self, net_enc, net_dec, crit, deep_sup_scale=None):
-        super(LLFSegmentationModule, self).__init__()
+        super(SegmentationModule, self).__init__()
         self.encoder = net_enc
         self.decoder = net_dec
         self.crit = crit

@@ -231,6 +231,7 @@ class ValDataset(torchdata.Dataset):
             img_resized = img_resized.astype(np.float32)
             img_resized = img_resized.transpose((2, 0, 1))
             img_resized = self.img_transform(torch.from_numpy(img_resized))
+            img_grey_resized = img_grey_resized.astype(np.float32)
             img_grey_resized = img_grey_resized[np.newaxis,:,:]
             img_grey_resized = torch.from_numpy(img_grey_resized) - 116
 

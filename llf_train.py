@@ -99,13 +99,21 @@ def checkpoint(nets, history, args, epoch_num):
 def group_weight(module):
     group_decay = []
     group_no_decay = []
+
+    module_paramters = list(module.parameters())
+    module_paramters_num = len(module_paramters)
+    for param in module_paramters:
+        if not param.requires_grad:
+            module_paramters_num -= 1
+
     for m in module.modules():
         if isinstance(m, nn.Linear):
             group_decay.append(m.weight)
             if m.bias is not None:
                 group_no_decay.append(m.bias)
         elif isinstance(m, nn.modules.conv._ConvNd):
-            group_decay.append(m.weight)
+            if m.weight.requires_grad:
+                group_decay.append(m.weight)
             if m.bias is not None:
                 group_no_decay.append(m.bias)
         elif isinstance(m, nn.modules.batchnorm._BatchNorm):
@@ -114,7 +122,7 @@ def group_weight(module):
             if m.bias is not None:
                 group_no_decay.append(m.bias)
 
-    assert len(list(module.parameters())) == len(group_decay) + len(group_no_decay)
+    assert module_paramters_num == len(group_decay) + len(group_no_decay)
     groups = [dict(params=group_decay), dict(params=group_no_decay, weight_decay=.0)]
     return groups
 
