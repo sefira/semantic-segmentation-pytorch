@@ -8,7 +8,7 @@ import torch.nn as nn
 import torchvision
 import cv2
 import models.gabor as gabor
-
+from models.models import *
 
 def conv3x3(in_planes, out_planes, stride=1, has_bias=False):
     "3x3 convolution with padding"
@@ -137,8 +137,9 @@ class ResnetDilatedLLF(nn.Module):
 
     def forward(self, x, gray_x, return_feature_maps=False):
         conv_out = []
-        llf_out = self.conv_llf(gray_x)
-        llf_out = self.conv_llf_downsample(llf_out)
+        llf_out = []
+        llf = self.conv_llf(gray_x);        llf_out.append(llf);
+        llf = self.conv_llf_downsample(llf);llf_out.append(llf);
 
         x = self.relu1(self.bn1(self.conv1(x)))
         x = self.relu2(self.bn2(self.conv2(x)))
@@ -146,12 +147,67 @@ class ResnetDilatedLLF(nn.Module):
         x = self.maxpool(x)
 
         x = self.layer1(x); conv_out.append(x);
-        x = torch.cat((x, llf_out), dim=1)
+        x = torch.cat((x, llf), dim=1)
         x = self.layer2(x); conv_out.append(x);
         x = self.layer3(x); conv_out.append(x);
         x = self.layer4(x); conv_out.append(x);
 
         if return_feature_maps:
-            return conv_out
+            return conv_out, llf_out
         return [x]
+
+
+class LLFSegmentationModule(SegmentationModule):
+    def __init__(self, net_enc, net_dec, crit, deep_sup_scale=None):
+        super(LLFSegmentationModule, self).__init__()
+        self.encoder = net_enc
+        self.decoder = net_dec
+        self.crit = crit
+        self.deep_sup_scale = deep_sup_scale
+
+    def forward(self, feed_dict, segSize=None, return_llf=False):
+        if segSize is None: # training
+            if self.deep_sup_scale is not None: # use deep supervision technique
+                (conv_out, llf_out) = self.encoder(feed_dict['img_data'], feed_dict['img_grey_data'], return_feature_maps=True)
+                (pred, pred_deepsup) = self.decoder(conv_out)
+            else:
+                (conv_out, llf_out) = self.encoder(feed_dict['img_data'], feed_dict['img_grey_data'], return_feature_maps=True)
+                pred = self.decoder(conv_out)
+
+            loss = self.crit(pred, feed_dict['seg_label'])
+            if self.deep_sup_scale is not None:
+                loss_deepsup = self.crit(pred_deepsup, feed_dict['seg_label'])
+                loss = loss + loss_deepsup * self.deep_sup_scale
+
+            acc = self.pixel_acc(pred, feed_dict['seg_label'])
+            if return_llf:
+                return loss, acc, llf_out
+            else:
+                return loss, acc
+        else: # inference
+            (conv_out, llf_out) = self.encoder(feed_dict['img_data'], feed_dict['img_grey_data'], return_feature_maps=True)
+            pred = self.decoder(conv_out, segSize=segSize)
+            return pred
+
+class LLFModelBuilder(ModelBuilder):
+    def build_encoder(self, arch='resnet50_dilated8', fc_dim=512, weights=''):
+        pretrained = True if len(weights) == 0 else False
+        if arch == 'resnet50_dilated8_llf':
+            orig_resnet = resnet.__dict__['resnet50'](pretrained=pretrained)
+            net_encoder = ResnetDilatedLLF(orig_resnet,
+                                        dilate_scale=8)
+        else:
+            raise Exception('Architecture undefined!')
+
+        # net_encoder.apply(self.weights_init)
+        if len(weights) > 0:
+            print('Loading weights for net_encoder')
+            model_dict = net_encoder.state_dict()
+            matched_dict = self.load_and_check_model_dict(weights, model_dict)
+            model_dict.update(matched_dict)
+            net_encoder.load_state_dict(model_dict)
+            # net_encoder.load_state_dict(
+            #     torch.load(weights, map_location=lambda storage, loc: storage), strict=False)
+        return net_encoder
+
 

@@ -14,8 +14,9 @@ from distutils.version import LooseVersion
 import torch
 import torch.nn as nn
 # Our libs
-from damage_dataset import TrainDataset
-from models import ModelBuilder, SegmentationModule
+from llf_dataset import TrainDataset
+from models.models_llf import LLFModelBuilder as ModelBuilder
+from models.models_llf import LLFSegmentationModule as SegmentationModule
 from utils import AverageMeter
 from lib.nn import UserScatteredDataParallel, user_scattered_collate, patch_replication_callback
 import lib.utils.data as torchdata

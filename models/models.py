@@ -8,7 +8,6 @@ import torch.nn as nn
 import torchvision
 from . import resnet, resnext
 from lib.nn import SynchronizedBatchNorm2d
-from models.models_llf import ResnetDilatedLLF
 
 
 class SegmentationModuleBase(nn.Module):
@@ -35,9 +34,9 @@ class SegmentationModule(SegmentationModuleBase):
     def forward(self, feed_dict, segSize=None):
         if segSize is None: # training
             if self.deep_sup_scale is not None: # use deep supervision technique
-                (pred, pred_deepsup) = self.decoder(self.encoder(feed_dict['img_data'], feed_dict['img_grey_data'], return_feature_maps=True))
+                (pred, pred_deepsup) = self.decoder(self.encoder(feed_dict['img_data'], return_feature_maps=True))
             else:
-                pred = self.decoder(self.encoder(feed_dict['img_data'], feed_dict['img_grey_data'], return_feature_maps=True))
+                pred = self.decoder(self.encoder(feed_dict['img_data'], return_feature_maps=True))
 
             loss = self.crit(pred, feed_dict['seg_label'])
             if self.deep_sup_scale is not None:
@@ -47,7 +46,7 @@ class SegmentationModule(SegmentationModuleBase):
             acc = self.pixel_acc(pred, feed_dict['seg_label'])
             return loss, acc
         else: # inference
-            pred = self.decoder(self.encoder(feed_dict['img_data'], feed_dict['img_grey_data'], return_feature_maps=True), segSize=segSize)
+            pred = self.decoder(self.encoder(feed_dict['img_data'], return_feature_maps=True), segSize=segSize)
             return pred
 
 
@@ -76,6 +75,25 @@ class ModelBuilder():
             m.bias.data.fill_(1e-4)
         #elif classname.find('Linear') != -1:
         #    m.weight.data.normal_(0.0, 0.0001)
+
+
+    def load_and_check_model_dict(self, weight, model_dict):
+        loaded_dict = torch.load(weights, map_location=lambda storage, loc: storage)
+        matched_dict = {}
+        for k,v in loaded_dict.items():
+            if k in model_dict:
+                if v.shape == model_dict[k].shape:
+                    matched_dict[k] = v
+                else:
+                    print("{} has different shape in loaded {} and created model {}".format(k, v.shape, model_dict[k].shape))
+            else:
+                print("loaded model has an unrecognized params: {}".format(k))
+        for k,v in model_dict.items():
+            if not k in matched_dict:
+                print("model need {}, but not loaded".format(k))
+        print("loaded {} params from file, model need {} params, {} matched".format(len(loaded_dict), len(model_dict), len(matched_dict)))
+        return matched_dict
+
 
     def build_encoder(self, arch='resnet50_dilated8', fc_dim=512, weights=''):
         pretrained = True if len(weights) == 0 else False
@@ -129,10 +147,6 @@ class ModelBuilder():
         elif arch == 'resnext101':
             orig_resnext = resnext.__dict__['resnext101'](pretrained=pretrained)
             net_encoder = Resnet(orig_resnext) # we can still use class Resnet
-        elif arch == 'resnet50_dilated8_llf':
-            orig_resnet = resnet.__dict__['resnet50'](pretrained=pretrained)
-            net_encoder = ResnetDilatedLLF(orig_resnet,
-                                        dilate_scale=8)
         else:
             raise Exception('Architecture undefined!')
 
@@ -140,20 +154,7 @@ class ModelBuilder():
         if len(weights) > 0:
             print('Loading weights for net_encoder')
             model_dict = net_encoder.state_dict()
-            loaded_dict = torch.load(weights, map_location=lambda storage, loc: storage)
-            matched_dict = {}
-            for k,v in loaded_dict.items():
-                if k in model_dict:
-                    if v.shape == model_dict[k].shape:
-                        matched_dict[k] = v
-                    else:
-                        print("{} has different shape in loaded {} and created model {}".format(k, v.shape, model_dict[k].shape))
-                else:
-                    print("loaded model has an unrecognized params: {}".format(k))
-            for k,v in model_dict.items():
-                if not k in matched_dict:
-                    print("model need {}, but not loaded".format(k))
-            print("loaded {} params from file, model need {} params, {} matched".format(len(loaded_dict), len(model_dict), len(matched_dict)))
+            matched_dict = self.load_and_check_model_dict(weights, model_dict)
             model_dict.update(matched_dict)
             net_encoder.load_state_dict(model_dict)
             # net_encoder.load_state_dict(
@@ -208,20 +209,7 @@ class ModelBuilder():
         if len(weights) > 0:
             print('Loading weights for net_decoder')
             model_dict = net_decoder.state_dict()
-            loaded_dict = torch.load(weights, map_location=lambda storage, loc: storage)
-            matched_dict = {}
-            for k,v in loaded_dict.items():
-                if k in model_dict:
-                    if v.shape == model_dict[k].shape:
-                        matched_dict[k] = v
-                    else:
-                        print("{} has different shape in loaded {} and created model {}".format(k, v.shape, model_dict[k].shape))
-                else:
-                    print("loaded model has an unrecognized params: {}".format(k))
-            for k,v in model_dict.items():
-                if not k in matched_dict:
-                    print("model need {}, but not loaded".format(k))
-            print("loaded {} params from file, model need {} params, {} matched".format(len(loaded_dict), len(model_dict), len(matched_dict)))
+            matched_dict = self.load_and_check_model_dict(weights, model_dict)
             model_dict.update(matched_dict)
             net_decoder.load_state_dict(model_dict)
             #net_decoder.load_state_dict(
