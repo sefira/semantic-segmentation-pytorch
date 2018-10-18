@@ -18,6 +18,7 @@ def round2nearest_multiple(x, p):
 
 class TrainDataset(torchdata.Dataset):
     def __init__(self, odgt, opt, max_sample=-1, batch_per_gpu=1):
+        self.opt = opt
         self.root_dataset = opt.root_dataset
         self.imgSize = opt.imgSize
         self.imgMaxSize = opt.imgMaxSize
@@ -48,6 +49,49 @@ class TrainDataset(torchdata.Dataset):
         assert self.num_sample > 0
         print('# samples: {}'.format(self.num_sample))
 
+        if self.opt.class_aware_balance:
+            print('Using class aware balance')
+            self.list_sample_balance = [[] for _ in range(self.opt.num_class)]
+            self.cur_idx_balance = [0 for _ in range(self.opt.num_class)]
+
+            for sample in self.list_sample:
+                classes = sample['gt_classes_area'].keys()
+                classes = set(classes)
+                for c in classes:
+                    if not c == '0':
+                        c = int(c)
+                        self.list_sample_balance[c].append(sample)
+
+    def _get_sub_batch_balance(self):
+        while True:
+            # get a sample record
+            class_idx = np.random.randint(1, high=self.opt.num_class)
+            class_size = len(self.list_sample_balance[class_idx])
+            if class_size <= 0:
+                continue
+            this_list = self.list_sample_balance[class_idx]
+            this_sample = this_list[self.cur_idx_balance[class_idx]]
+            if this_sample['height'] > this_sample['width']:
+                self.batch_record_list[0].append(this_sample) # h > w, go to 1st class
+            else:
+                self.batch_record_list[1].append(this_sample) # h <= w, go to 2nd class
+
+            # update current sample pointer
+            self.cur_idx_balance[class_idx] += 1
+            if self.cur_idx_balance[class_idx] >= class_size:
+                self.cur_idx_balance[class_idx] = 0
+                np.random.shuffle(self.list_sample_balance[class_idx])
+
+            if len(self.batch_record_list[0]) == self.batch_per_gpu:
+                batch_records = self.batch_record_list[0]
+                self.batch_record_list[0] = []
+                break
+            elif len(self.batch_record_list[1]) == self.batch_per_gpu:
+                batch_records = self.batch_record_list[1]
+                self.batch_record_list[1] = []
+                break
+        return batch_records
+
     def _get_sub_batch(self):
         while True:
             # get a sample record
@@ -77,10 +121,16 @@ class TrainDataset(torchdata.Dataset):
         # NOTE: random shuffle for the first time. shuffle in __init__ is useless
         if not self.if_shuffled:
             np.random.shuffle(self.list_sample)
+            if self.opt.class_aware_balance:
+                for idx in range(len(self.list_sample_balance)):
+                    np.random.shuffle(self.list_sample_balance[idx])
             self.if_shuffled = True
 
         # get sub-batch candidates
-        batch_records = self._get_sub_batch()
+        if self.opt.class_aware_balance:
+            batch_records = self._get_sub_batch_balance()
+        else:
+            batch_records = self._get_sub_batch()
 
         # resize all images' short edges to the chosen size
         if isinstance(self.imgSize, list):
