@@ -18,7 +18,7 @@ from scipy.io import loadmat
 # Our libs
 from damage_dataset import ValDataset
 from models import ModelBuilder, SegmentationModule
-from utils import AverageMeter, colorEncode, accuracy, intersectionAndUnion, parse_devices
+from utils import AverageMeter, colorEncode, maskEncode, accuracy, intersectionAndUnion, parse_devices
 from lib.nn import user_scattered_collate, async_copy_to
 from lib.utils import as_numpy, mark_volatile
 import lib.utils.data as torchdata
@@ -45,11 +45,18 @@ def visualize_result(data, preds, args):
     colors = loadmat('data/color150.mat')['colors']
     (img, seg, info) = data
 
-    # segmentation
-    seg_color = colorEncode(seg, colors)
+    if args.vis_mask_style:
+        # segmentation
+        seg_color = maskEncode(img, seg, colors, alpha=0.4, show_border=True, border_thick=1)
 
-    # prediction
-    pred_color = colorEncode(preds, colors)
+        # prediction
+        pred_color = maskEncode(img, preds, colors, alpha=0.4, show_border=True, border_thick=1)
+    else:
+        # segmentation
+        seg_color = colorEncode(seg, colors)
+
+        # prediction
+        pred_color = colorEncode(preds, colors)
 
     # aggregate images and save
     im_vis = np.concatenate((img, seg_color, pred_color),
@@ -254,6 +261,8 @@ if __name__ == '__main__':
                         help='folder to output checkpoints')
     parser.add_argument('--visualize', action='store_true',
                         help='output visualization?')
+    parser.add_argument('--vis_mask_style', action='store_true',
+                        help='vis result as mask rcnn style')
     parser.add_argument('--result', default='./result',
                         help='folder to output visualization results')
     parser.add_argument('--devices', default='gpu0',

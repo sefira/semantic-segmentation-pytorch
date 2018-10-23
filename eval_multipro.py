@@ -18,23 +18,45 @@ from scipy.io import loadmat
 # Our libs
 from dataset import ValDataset
 from models import ModelBuilder, SegmentationModule
-from utils import AverageMeter, colorEncode, accuracy, intersectionAndUnion, parse_devices
+from utils import AverageMeter, colorEncode, maskEncode, accuracy, intersectionAndUnion, parse_devices
 from lib.nn import user_scattered_collate, async_copy_to
 from lib.utils import as_numpy, mark_volatile
 import lib.utils.data as torchdata
 import cv2
 from tqdm import tqdm
 
+def fast_hist(a, b, n):
+    k = (a >= 0) & (a < n)
+    return np.bincount(n * a[k].astype(int) + b[k], minlength=n ** 2).reshape(n,n)
+
+def mean_IoU(overall_h):
+    iu = np.diag(overall_h) / (overall_h.sum(1) + overall_h.sum(0) - np.diag(overall_h))
+    return np.nanmean(iu)
+
+def per_class_acc(overall_h):
+    acc = np.diag(overall_h) / overall_h.sum(1)
+    return np.nanmean(acc)
+
+def pixel_wise_acc(overall_h):
+    return np.diag(overall_h).sum() / overall_h.sum()
+
 
 def visualize_result(data, preds, args):
     colors = loadmat('data/color150.mat')['colors']
     (img, seg, info) = data
 
-    # segmentation
-    seg_color = colorEncode(seg, colors)
+    if args.vis_mask_style:
+        # segmentation
+        seg_color = maskEncode(img, seg, colors, alpha=0.4, show_border=True, border_thick=1)
 
-    # prediction
-    pred_color = colorEncode(preds, colors)
+        # prediction
+        pred_color = maskEncode(img, preds, colors, alpha=0.4, show_border=True, border_thick=1)
+    else:
+        # segmentation
+        seg_color = colorEncode(seg, colors)
+
+        # prediction
+        pred_color = colorEncode(preds, colors)
 
     # aggregate images and save
     im_vis = np.concatenate((img, seg_color, pred_color),
@@ -77,7 +99,9 @@ def evaluate(segmentation_module, loader, args, dev_id, result_queue):
         # calculate accuracy and SEND THEM TO MASTER
         acc, pix = accuracy(preds, seg_label)
         intersection, union = intersectionAndUnion(preds, seg_label, args.num_class)
-        result_queue.put_nowait((acc, pix, intersection, union))
+
+        hist_img = fast_hist(seg_label, preds, args.num_class)
+        result_queue.put_nowait((acc, pix, intersection, union, hist_img))
 
         # visualization
         if args.visualize:
@@ -143,6 +167,7 @@ def main(args):
     acc_meter = AverageMeter(window_size=None)
     intersection_meter = AverageMeter(window_size=None)
     union_meter = AverageMeter(window_size=None)
+    hist_meter = AverageMeter(window_size=None)
 
     result_queue = Queue(500)
     procs = []
@@ -159,10 +184,11 @@ def main(args):
     while processed_counter < nr_files:
         if result_queue.empty():
             continue
-        (acc, pix, intersection, union) = result_queue.get()
+        (acc, pix, intersection, union, hist_img) = result_queue.get()
         acc_meter.update(acc, pix)
         intersection_meter.update(intersection)
         union_meter.update(union)
+        hist_meter.update(hist_img)
         processed_counter += 1
         pbar.update(1)
 
@@ -178,6 +204,18 @@ def main(args):
           .format(iou.mean(), acc_meter.average()*100))
 
     print('Evaluation Done!')
+    hist = hist_meter.sum
+    hist_normal = hist / np.max(hist).astype(float)
+    # print((hist_normal*10000).astype(int))
+    # plt.figure(figsize=(200,200))
+    # plt.show((hist_normal*255).astype(int), interpolation = 'nearest', cmap = 'bone', origin = 'lower')
+    # plt.savefig("confuseMatrix.png")
+    print(hist)
+    print('Mean IoU:', mean_IoU(hist))
+    print('Pixel Acc:', pixel_wise_acc(hist))
+    print('Mean Acc:', per_class_acc(hist))
+    print(np.diag(hist).sum() / hist.sum())
+
 
 
 if __name__ == '__main__':
@@ -223,6 +261,8 @@ if __name__ == '__main__':
                         help='folder to output checkpoints')
     parser.add_argument('--visualize', action='store_true',
                         help='output visualization?')
+    parser.add_argument('--vis_mask_style', action='store_true',
+                        help='vis result as mask rcnn style')
     parser.add_argument('--result', default='./result',
                         help='folder to output visualization results')
     parser.add_argument('--devices', default='gpu0',

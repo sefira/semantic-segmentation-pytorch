@@ -7,6 +7,7 @@ import numpy as np
 import re
 import functools
 from collections import deque
+import cv2
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
@@ -104,6 +105,22 @@ def colorEncode(labelmap, colors, mode='BGR'):
     else:
         return labelmap_rgb
 
+def maskEncode(img, labelmap, colors, alpha=0.4, show_border=True, border_thick=1, mode='BGR'):
+    img = img.copy().astype(np.float32)
+    labelmap = labelmap.astype(np.uint8)
+    for label in unique(labelmap):
+        if label < 0:
+            continue
+        label_idx = np.where(labelmap == label)
+        img[label_idx] *= (1.0 - alpha)
+        img[label_idx] += (alpha * colors[label])
+
+    if show_border:
+        _, contours, _ = cv2.findContours(
+            labelmap.copy(), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
+        cv2.drawContours(img, contours, -1, (255, 255, 255), border_thick, cv2.LINE_AA)
+
+    return img.astype(np.uint8)
 
 def accuracy(preds, label):
     valid = (label >= 0)
