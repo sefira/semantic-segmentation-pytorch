@@ -19,7 +19,7 @@ from scipy.io import loadmat
 from llf_dataset import ValDataset
 from models.models_llf import LLFModelBuilder as ModelBuilder
 from models.models_llf import LLFSegmentationModule as SegmentationModule
-from utils import AverageMeter, colorEncode, accuracy, intersectionAndUnion, parse_devices
+from utils import AverageMeter, colorEncode, maskEncode, accuracy, intersectionAndUnion, parse_devices
 from lib.nn import user_scattered_collate, async_copy_to
 from lib.utils import as_numpy, mark_volatile
 import lib.utils.data as torchdata
@@ -46,11 +46,18 @@ def visualize_result(data, preds, args):
     colors = loadmat('data/color150.mat')['colors']
     (img, seg, info) = data
 
-    # segmentation
-    seg_color = colorEncode(seg, colors)
+    if args.vis_mask_style:
+        # segmentation
+        seg_color = maskEncode(img, seg, colors, alpha=0.4, show_border=True, border_thick=1)
 
-    # prediction
-    pred_color = colorEncode(preds, colors)
+        # prediction
+        pred_color = maskEncode(img, preds, colors, alpha=0.4, show_border=True, border_thick=1)
+    else:
+        # segmentation
+        seg_color = colorEncode(seg, colors)
+
+        # prediction
+        pred_color = colorEncode(preds, colors)
 
     # aggregate images and save
     im_vis = np.concatenate((img, seg_color, pred_color),
@@ -91,6 +98,25 @@ def evaluate(segmentation_module, loader, args, dev_id, result_queue):
                 # forward pass
                 pred_tmp = segmentation_module(feed_dict, segSize=segSize)
                 pred = pred + pred_tmp.cpu() / len(args.imgSize)
+
+            if args.test_flip:
+                pred_flip = torch.zeros(1, args.num_class, segSize[0], segSize[1])
+                for idx in range(input_num):
+                    img = img_resized_list[idx]
+                    img_grey = img_grey_resized_list[idx]
+                    feed_dict = batch_data.copy()
+                    feed_dict['img_data'] = torch.from_numpy(img.numpy()[:, :, :, ::-1].copy())  # NCHW, flip W
+                    feed_dict['img_grey_data'] = torch.from_numpy(img_grey.numpy()[:, :, :, ::-1].copy())  # NCHW, flip W
+                    del feed_dict['img_ori']
+                    del feed_dict['info']
+                    feed_dict = async_copy_to(feed_dict, dev_id)
+
+                    # forward pass
+                    pred_tmp = segmentation_module(feed_dict, segSize=segSize)
+                    pred_flip = pred_flip + pred_tmp.cpu() / len(args.imgSize)
+
+                pred_flip = torch.from_numpy(pred_flip.numpy()[:, :, :, ::-1].copy())
+                pred = (pred + pred_flip) / 2
 
             _, preds = torch.max(pred.data.cpu(), dim=1)
             preds = as_numpy(preds.squeeze(0))
@@ -254,12 +280,16 @@ if __name__ == '__main__':
                         help='maximum input image size of long edge')
     parser.add_argument('--padding_constant', default=8, type=int,
                         help='maxmimum downsampling rate of the network')
+    parser.add_argument('--test_flip', action='store_true',
+                        help='flip all size images for testing')
 
     # Misc arguments
     parser.add_argument('--ckpt', default='./ckpt',
                         help='folder to output checkpoints')
     parser.add_argument('--visualize', action='store_true',
                         help='output visualization?')
+    parser.add_argument('--vis_mask_style', action='store_true',
+                        help='vis result as mask rcnn style')
     parser.add_argument('--result', default='./result',
                         help='folder to output visualization results')
     parser.add_argument('--devices', default='gpu0',
