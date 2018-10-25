@@ -76,6 +76,25 @@ class ModelBuilder():
         #elif classname.find('Linear') != -1:
         #    m.weight.data.normal_(0.0, 0.0001)
 
+
+    def load_and_check_model_dict(self, weights, model_dict):
+        loaded_dict = torch.load(weights, map_location=lambda storage, loc: storage)
+        matched_dict = {}
+        for k,v in loaded_dict.items():
+            if k in model_dict:
+                if v.shape == model_dict[k].shape:
+                    matched_dict[k] = v
+                else:
+                    print("{} has different shape in loaded {} and created model {}".format(k, v.shape, model_dict[k].shape))
+            else:
+                print("loaded model has an unrecognized params: {}".format(k))
+        for k,v in model_dict.items():
+            if not k in matched_dict:
+                print("model need {}, but not loaded".format(k))
+        print("loaded {} params from file, model need {} params, {} matched".format(len(loaded_dict), len(model_dict), len(matched_dict)))
+        return matched_dict
+
+
     def build_encoder(self, arch='resnet50_dilated8', fc_dim=512, weights=''):
         pretrained = True if len(weights) == 0 else False
         if arch == 'resnet18':
@@ -135,20 +154,7 @@ class ModelBuilder():
         if len(weights) > 0:
             print('Loading weights for net_encoder')
             model_dict = net_encoder.state_dict()
-            loaded_dict = torch.load(weights, map_location=lambda storage, loc: storage)
-            matched_dict = {}
-            for k,v in loaded_dict.items():
-                if k in model_dict:
-                    if v.shape == model_dict[k].shape:
-                        matched_dict[k] = v
-                    else:
-                        print("{} has different shape in loaded {} and created model {}".format(k, v.shape, model_dict[k].shape))
-                else:
-                    print("loaded model has an unrecognized params: {}".format(k))
-            for k,v in model_dict.items():
-                if not k in matched_dict:
-                    print("model need {}, but not loaded".format(k))
-            print("loaded {} params from file, model need {} params, {} matched".format(len(loaded_dict), len(model_dict), len(matched_dict)))
+            matched_dict = self.load_and_check_model_dict(weights, model_dict)
             model_dict.update(matched_dict)
             net_encoder.load_state_dict(model_dict)
             # net_encoder.load_state_dict(
@@ -203,20 +209,7 @@ class ModelBuilder():
         if len(weights) > 0:
             print('Loading weights for net_decoder')
             model_dict = net_decoder.state_dict()
-            loaded_dict = torch.load(weights, map_location=lambda storage, loc: storage)
-            matched_dict = {}
-            for k,v in loaded_dict.items():
-                if k in model_dict:
-                    if v.shape == model_dict[k].shape:
-                        matched_dict[k] = v
-                    else:
-                        print("{} has different shape in loaded {} and created model {}".format(k, v.shape, model_dict[k].shape))
-                else:
-                    print("loaded model has an unrecognized params: {}".format(k))
-            for k,v in model_dict.items():
-                if not k in matched_dict:
-                    print("model need {}, but not loaded".format(k))
-            print("loaded {} params from file, model need {} params, {} matched".format(len(loaded_dict), len(model_dict), len(matched_dict)))
+            matched_dict = self.load_and_check_model_dict(weights, model_dict)
             model_dict.update(matched_dict)
             net_decoder.load_state_dict(model_dict)
             #net_decoder.load_state_dict(
