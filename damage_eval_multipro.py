@@ -93,6 +93,22 @@ def evaluate(segmentation_module, loader, args, dev_id, result_queue):
                 pred_tmp = segmentation_module(feed_dict, segSize=segSize)
                 pred = pred + pred_tmp.cpu() / len(args.imgSize)
 
+            if args.test_flip:
+                pred_flip = torch.zeros(1, args.num_class, segSize[0], segSize[1])
+                for img in img_resized_list:
+                    feed_dict = batch_data.copy()
+                    feed_dict['img_data'] = torch.from_numpy(img.numpy()[:, :, :, ::-1].copy())  # NCHW, flip W
+                    del feed_dict['img_ori']
+                    del feed_dict['info']
+                    feed_dict = async_copy_to(feed_dict, dev_id)
+
+                    # forward pass
+                    pred_tmp = segmentation_module(feed_dict, segSize=segSize)
+                    pred_flip = pred_flip + pred_tmp.cpu() / len(args.imgSize)
+
+                pred_flip = torch.from_numpy(pred_flip.numpy()[:, :, :, ::-1].copy())
+                pred = (pred + pred_flip) / 2
+
             _, preds = torch.max(pred.data.cpu(), dim=1)
             preds = as_numpy(preds.squeeze(0))
 
@@ -255,6 +271,8 @@ if __name__ == '__main__':
                         help='maximum input image size of long edge')
     parser.add_argument('--padding_constant', default=8, type=int,
                         help='maxmimum downsampling rate of the network')
+    parser.add_argument('--test_flip', action='store_true',
+                        help='flip all size images for testing')
 
     # Misc arguments
     parser.add_argument('--ckpt', default='./ckpt',
