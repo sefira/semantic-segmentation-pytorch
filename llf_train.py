@@ -122,7 +122,8 @@ def group_weight(module):
             if m.bias is not None:
                 group_no_decay.append(m.bias)
 
-    assert module_paramters_num == len(group_decay) + len(group_no_decay)
+    assert module_paramters_num == len(group_decay) + len(group_no_decay), \
+        '{} != {} + {}'.format(module_paramters_num, len(group_decay), len(group_no_decay))
     groups = [dict(params=group_decay), dict(params=group_no_decay, weight_decay=.0)]
     return groups
 

@@ -41,11 +41,15 @@ class LLFBlock(nn.Module):
         self.conv_llf.weight.requires_grad = False
 
         self.conv_llf_stride = nn.Conv2d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, bias=False)
-        zeros_init_(self.conv_llf_stride.weight.data)
+        nn.init.kaiming_normal_(self.conv_llf_stride.weight.data)
+        #nn.init.normal_(self.conv_llf_stride.weight.data)
 
         self.bn = SynchronizedBatchNorm2d(outplanes)
+        #self.bn.weight.data.fill_(0.)
+        #self.bn.bias.data.fill_(0.)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.relu = nn.ReLU(inplace=True)
+        #self.relu = nn.PReLU()
 
     def forward(self, x):
         llf_out = []
