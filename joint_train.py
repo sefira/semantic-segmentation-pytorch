@@ -15,7 +15,8 @@ import torch
 import torch.nn as nn
 # Our libs
 from damage_dataset import TrainDataset
-from models.models_joint import JointModelBuilder, JointSegmentationModule
+from models import ModelBuilder
+from models.models_joint import JointSegmentationModule
 from utils import AverageMeter
 from lib.nn import UserScatteredDataParallel, user_scattered_collate, patch_replication_callback
 import lib.utils.data as torchdata
@@ -81,13 +82,13 @@ def train(segmentation_module, iterator_damage, iterator_part, optimizers, histo
         # calculate accuracy, and display
         if i % args.disp_iter == 0:
             print('Epoch: [{}][{}/{}], Time: {:.2f}, Data: {:.2f}, '
-                  'lr_encoder: {:.6f}, lr_decoder: {:.6f}, '
+                  'lr_encoder: {:.6f}, lr_decoder_damage: {:.6f}, lr_decoder_part: {:.6f}, '
                   'Accuracy: {:4.2f}, Loss: {:.6f}, '
                   'damage acc: {:.6f}, part acc: {:.6f}, '
                   'damage loss: {:.6f}, part loss: {:.6f}'
                   .format(epoch, i, args.epoch_iters,
                           batch_time.average(), data_time.average(),
-                          args.running_lr_encoder, args.running_lr_decoder,
+                          args.running_lr_encoder, args.running_lr_decoder_damage, args.running_lr_decoder_part,
                           ave_acc.average(), ave_total_loss.average(),
                           ave_acc_damage.average(), ave_acc_part.average(),
                           ave_total_loss_damage.average(), ave_total_loss_part.average(),))
@@ -111,9 +112,6 @@ def checkpoint(nets, history, args, epoch_num):
     dict_decoder_damage = net_decoder_damage.state_dict()
     dict_decoder_part = net_decoder_part.state_dict()
 
-    # dict_encoder_save = {k: v for k, v in dict_encoder.items() if not (k.endswith('_tmp_running_mean') or k.endswith('tmp_running_var'))}
-    # dict_decoder_save = {k: v for k, v in dict_decoder.items() if not (k.endswith('_tmp_running_mean') or k.endswith('tmp_running_var'))}
-    
     torch.save(history,
                '{}/history_{}'.format(args.ckpt, suffix_latest))
     torch.save(dict_encoder,
@@ -154,55 +152,68 @@ def create_optimizers(nets, args):
         lr=args.lr_encoder,
         momentum=args.beta1,
         weight_decay=args.weight_decay)
-    optimizer_decoder = torch.optim.SGD(
+    optimizer_decoder_damage = torch.optim.SGD(
         group_weight(net_decoder_damage),
-        lr=args.lr_decoder,
+        lr=args.lr_decoder_damage,
         momentum=args.beta1,
         weight_decay=args.weight_decay)
-    optimizer_decoder = torch.optim.SGD(
+    optimizer_decoder_part = torch.optim.SGD(
         group_weight(net_decoder_part),
-        lr=args.lr_decoder,
+        lr=args.lr_decoder_part,
         momentum=args.beta1,
         weight_decay=args.weight_decay)
-    return (optimizer_encoder, optimizer_decoder)
+    return (optimizer_encoder, optimizer_decoder_damage, optimizer_decoder_part)
 
 
 def adjust_learning_rate(optimizers, cur_iter, args):
     scale_running_lr = ((1. - float(cur_iter) / args.max_iters) ** args.lr_pow)
     args.running_lr_encoder = args.lr_encoder * scale_running_lr
-    args.running_lr_decoder = args.lr_decoder * scale_running_lr
+    args.running_lr_decoder_damage = args.lr_decoder_damage * scale_running_lr
+    args.running_lr_decoder_part = args.lr_decoder_part * scale_running_lr
 
-    (optimizer_encoder, optimizer_decoder) = optimizers
+    (optimizer_encoder, optimizer_decoder_damage, optimizer_decoder_part) = optimizers
     for param_group in optimizer_encoder.param_groups:
         param_group['lr'] = args.running_lr_encoder
-    for param_group in optimizer_decoder.param_groups:
-        param_group['lr'] = args.running_lr_decoder
+    for param_group in optimizer_decoder_damage.param_groups:
+        param_group['lr'] = args.running_lr_decoder_damage
+    for param_group in optimizer_decoder_part.param_groups:
+        param_group['lr'] = args.running_lr_decoder_part
+
+
+def freeze_model_except_part(nets, args):
+    (net_encoder, net_decoder_damage, net_decoder_part, crit) = nets
+    for param in net_encoder.parameters():
+        param.requires_grad = False
+    for param in net_decoder_damage.parameters():
+        param.requires_grad = False
 
 
 def main(args):
     # Network Builders
-    builder = JointModelBuilder()
+    builder = ModelBuilder()
     net_encoder = builder.build_encoder(
         arch=args.arch_encoder,
         fc_dim=args.fc_dim,
         weights=args.weights_encoder)
-    net_decoder_damage, net_decoder_part = builder.build_decoder_joint(
-        arch_damage=args.arch_decoder_damage,
-        arch_part=args.arch_decoder_part,
+    net_decoder_damage = builder.build_decoder(
+        arch=args.arch_decoder_damage,
         fc_dim=args.fc_dim,
-        num_class_damage=args.num_class_damage,
-        num_class_part=args.num_class_part,
-        weights_damage=args.weights_decoder_damage,
-        weights_part=args.weights_decoder_part)
+        num_class=args.num_class_damage,
+        weights=args.weights_decoder_damage)
+    net_decoder_part = builder.build_decoder(
+        arch=args.arch_decoder_part,
+        fc_dim=args.fc_dim,
+        num_class=args.num_class_part,
+        weights=args.weights_decoder_part)
 
     crit = nn.NLLLoss(ignore_index=-1)
 
-    if args.arch_decoder_damage.endswith('deepsup'):
-        segmentation_module = JointSegmentationModule(
-            net_encoder, net_decoder_damage, net_decoder_part, crit, args.deep_sup_scale)
-    else:
-        segmentation_module = JointSegmentationModule(
-            net_encoder, net_decoder_damage, net_decoder_part, crit)
+    if not args.arch_decoder_damage.endswith('deepsup'):
+        args.deep_sup_scale_damage = None
+    if not args.arch_decoder_part.endswith('deepsup'):
+        args.deep_sup_scale_part = None
+    segmentation_module = JointSegmentationModule(
+        net_encoder, net_decoder_damage, net_decoder_part, crit, args.deep_sup_scale_damage, args.deep_sup_scale_part)
     print(segmentation_module)
 
     # Dataset and Loader
@@ -248,6 +259,8 @@ def main(args):
 
     # Set up optimizers
     nets = (net_encoder, net_decoder_damage, net_decoder_part, crit)
+    if args.part_finetune_only:
+        freeze_model_except_part(nets, args)
     optimizers = create_optimizers(nets, args)
 
     # Main loop
@@ -308,20 +321,25 @@ if __name__ == '__main__':
                         help='iterations of each epoch (irrelevant to batch size)')
     parser.add_argument('--optim', default='SGD', help='optimizer')
     parser.add_argument('--lr_encoder', default=2e-2, type=float, help='LR')
-    parser.add_argument('--lr_decoder', default=2e-2, type=float, help='LR')
+    parser.add_argument('--lr_decoder_damage', default=2e-2, type=float, help='LR')
+    parser.add_argument('--lr_decoder_part', default=2e-2, type=float, help='LR')
     parser.add_argument('--lr_pow', default=0.9, type=float,
                         help='power in poly to drop LR')
     parser.add_argument('--beta1', default=0.9, type=float,
                         help='momentum for sgd, beta1 for adam')
     parser.add_argument('--weight_decay', default=1e-4, type=float,
                         help='weights regularizer')
-    parser.add_argument('--deep_sup_scale', default=0.4, type=float,
+    parser.add_argument('--deep_sup_scale_damage', default=0.4, type=float,
+                        help='the weight of deep supervision loss')
+    parser.add_argument('--deep_sup_scale_part', default=0.4, type=float,
                         help='the weight of deep supervision loss')
     parser.add_argument('--fix_bn', default=0, type=int,
                         help='fix bn params')
     parser.add_argument('--part_loss_scale', default=0.3, type=float,
                         help='part semseg loss scale, the final loss is computed as: \
                         damage_loss * (1-part_loss_scale) + part_loss * (part_loss_scale)')
+    parser.add_argument('--part_finetune_only', action='store_true',
+                        help='only finetune part head, while freeze damage head and backbone')
 
     # Data related arguments
     parser.add_argument('--num_class_damage', default=6, type=int,
@@ -340,6 +358,8 @@ if __name__ == '__main__':
                         help='downsampling rate of the segmentation label')
     parser.add_argument('--random_flip', default=True, type=bool,
                         help='if horizontally flip images when training')
+    parser.add_argument('--class_aware_balance', default=False, type=bool,
+                        help='if use class aware sampling when training')
 
     # Misc arguments
     parser.add_argument('--seed', default=304, type=int, help='manual seed')
@@ -356,7 +376,8 @@ if __name__ == '__main__':
     args.batch_size = args.num_gpus * args.batch_size_per_gpu
     args.max_iters = args.epoch_iters * args.num_epoch
     args.running_lr_encoder = args.lr_encoder
-    args.running_lr_decoder = args.lr_decoder
+    args.running_lr_decoder_damage = args.lr_decoder_damage
+    args.running_lr_decoder_part = args.lr_decoder_part
 
     args.id += '-' + str(args.arch_encoder)
     args.id += '-' + str(args.arch_decoder_damage)
@@ -367,7 +388,8 @@ if __name__ == '__main__':
     args.id += '-paddingConst' + str(args.padding_constant)
     args.id += '-segmDownsampleRate' + str(args.segm_downsampling_rate)
     args.id += '-LR_encoder' + str(args.lr_encoder)
-    args.id += '-LR_decoder' + str(args.lr_decoder)
+    args.id += '-LR_decoder_damage' + str(args.lr_decoder_damage)
+    args.id += '-LR_decoder_part' + str(args.lr_decoder_part)
     args.id += '-epoch' + str(args.num_epoch)
     args.id += '-decay' + str(args.weight_decay)
     args.id += '-fixBN' + str(args.fix_bn)
