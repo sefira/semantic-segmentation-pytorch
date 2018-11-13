@@ -407,6 +407,8 @@ if __name__ == '__main__':
     args.id += '-epoch' + str(args.num_epoch)
     args.id += '-decay' + str(args.weight_decay)
     args.id += '-fixBN' + str(args.fix_bn)
+    args.id += '-part_loss_scale' + str(args.part_loss_scale)
+    args.id += '-part_finetune_only' + str(args.part_finetune_only)
     print('Model ID: {}'.format(args.id))
 
     args.ckpt = os.path.join(args.ckpt, args.id)
