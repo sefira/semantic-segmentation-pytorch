@@ -264,11 +264,11 @@ if __name__ == '__main__':
                         help='number of classes')
     parser.add_argument('--batch_size', default=1, type=int,
                         help='batchsize. current only supports 1')
-    parser.add_argument('--imgSize', default=[450], nargs='+', type=int,
+    parser.add_argument('--imgSize', default=[328], nargs='+', type=int,
                         help='list of input image sizes.'
-                             'for multiscale testing, e.g.  300 400 500 600')
-    parser.add_argument('--imgMaxSize', default=1000, type=int,
-                        help='maximum input image size of long edge')
+                             'for multiscale testing, e.g. 200 300 400 500')
+    parser.add_argument('--imgMaxSize', default=512, type=int,
+                        help='maximum input image size of long edge, e.g. 800')
     parser.add_argument('--padding_constant', default=8, type=int,
                         help='maxmimum downsampling rate of the network')
     parser.add_argument('--test_flip', action='store_true',
